@@ -123,3 +123,6 @@ dmypy.json
 *.h5
 *.npy
 data/train_val.split
+
+# directories
+logs/

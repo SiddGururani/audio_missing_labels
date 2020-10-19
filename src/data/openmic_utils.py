@@ -44,16 +44,6 @@ class HDF5Dataset(Dataset):
         self.Y_true = h['Y_true'][:]
         self.Y_mask = h['Y_mask'][:]
         h.close()
-    
-    def get_vggish(self):
-        if self.h is None:
-            self.h = h5py.File(self.h5_path, 'r', libver='latest', swmr=True)
-            self.vggish = self.h['vggish'][:]/255.0
-            self.spec = self.h['spec']
-            self.audio = self.h['audio']
-            self.Y_true = self.h['Y_true']
-            self.Y_mask = self.h['Y_mask']
-        return self.vggish
 
     def __len__(self):
         return self.length
@@ -64,8 +54,6 @@ class HDF5Dataset(Dataset):
         if self.h is None:
             self.h = h5py.File(self.h5_path, 'r', libver='latest', swmr=True)
             self.vggish = self.h['vggish'][:]/255.0
-            self.spec = self.h['spec']
-            self.audio = self.h['audio']
             self.Y_true = self.h['Y_true'][:]
             self.Y_mask = self.h['Y_mask'][:]
         # Add routines to decide which data to pick up depending on what augmentation to use

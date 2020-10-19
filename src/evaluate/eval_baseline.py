@@ -2,12 +2,13 @@ import sys
 import math
 import random
 from copy import deepcopy
+from tqdm import tqdm
 
 import numpy
 import torch
 import torch.nn as nn
 from pprint import pprint
-from ..trainer.train_utils import *
+from trainer.train_utils import *
 
 def eval_baseline(model, data_loader, criterion, n_classes, metric_fn, return_preds=False, baseline_type=0):
     model.eval()

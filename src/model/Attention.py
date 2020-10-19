@@ -6,19 +6,19 @@ import torch.nn.functional as F
 from torch.nn import init
 import torch.optim as optim
 from torch.autograd import Variable
-from model import count_parameters
 
-def create_model(params, no_grad=False):
-    model = DecisionLevelSingleAttention(128,
-                                         params['n_classes'],
-                                         params['n_layers'],
-                                         128,
-                                         params['drop_rate'])
-    model = model.cuda()
-    if no_grad:
-        for param in model.parameters():
-            param.detach_().requires_grad_(False)
-    return model
+def count_parameters(model):
+    total_param = 0
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            num_param = np.prod(param.size())
+            # if param.dim() > 1:
+            #     print(name, ':', 'x'.join(str(x) for x in list(param.size())), '=', num_param)
+            # else:
+            #     print(name, ':', num_param)
+            total_param += num_param
+    # print('Total Parameters: {}'.format(total_param))
+    return total_param
 
 def init_layer(layer):
     if layer.weight.ndimension() == 4:

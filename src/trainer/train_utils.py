@@ -1,6 +1,6 @@
 import math
 
-from ..model.Attention import DecisionLevelSingleAttention
+from model.Attention import DecisionLevelSingleAttention
 
 def rampup(epoch, rampup_length):
     if epoch < rampup_length:

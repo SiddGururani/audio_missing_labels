@@ -1,14 +1,6 @@
-import sys
-import math
-import random
-from pprint import pprint
-from copy import deepcopy
-
-import numpy
-import torch
-import torch.nn as nn
+from tqdm import tqdm
 import torch.nn.functional as F
-from ..trainer.train_utils import *
+from trainer.train_utils import *
 
 def trainer(model, teacher, data_loader, optimizer, criterion, c_w, alpha, epoch_num):
     global_step = epoch_num * len(data_loader)

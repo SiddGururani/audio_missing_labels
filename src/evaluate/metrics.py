@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.metrics import precision_recall_curve, auc, confusion_matrix, f1_score, classification_report
+from sklearn.metrics import precision_recall_curve, auc, confusion_matrix, f1_score, classification_report, roc_auc_score
 
 # https://github.com/multitel-ai/urban-sound-tagging/blob/master/utils/metrics.py
 def auprc(y_true, y_scores):
@@ -76,7 +76,7 @@ def metric_fn_sonycust(Y_true, Y_mask, preds):
         
     metrics = {
         'auprc_macro': np.array(avg_auprc),
-        'F1_micro': compute_micro_F1(Y_true[Y_mask], preds[Y_mask])
+        'F1_micro': compute_micro_F1(Y_true[Y_mask], preds[Y_mask]),
         'auprc_micro': compute_micro_F1(Y_true[Y_mask], preds[Y_mask])
     }
     return metrics
@@ -90,7 +90,7 @@ def metric_fn_openmic(Y_true, Y_mask, preds, threshold=0.5):
     avg_recall_macro = []
     auroc = []
 
-    for i in range(labels.shape[-1]):
+    for i in range(Y_true.shape[-1]):
         labels = Y_true[:, i]
         labels_mask = Y_mask[:, i]
         predictions = preds[:, i]
@@ -107,7 +107,7 @@ def metric_fn_openmic(Y_true, Y_mask, preds, threshold=0.5):
 #     print(classification_report(
 #         labels[relevant_inds], predictions[relevant_inds]))
     # return classification report
-        results = classification_report(labels[relevant_inds], predictions[relevant_inds]
+        results = classification_report(labels[relevant_inds], predictions[relevant_inds], output_dict=True)
 
         avg_fscore_weighted.append(results['weighted avg']['f1-score'])
         avg_fscore_macro.append(results['macro avg']['f1-score'])

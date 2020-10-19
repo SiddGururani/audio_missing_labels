@@ -1,14 +1,13 @@
 # Script to run all baseline experiments
-
 import os
 import random
 import json
-import numpy as mp
+import numpy as np
 from copy import deepcopy
 from pprint import pprint
 from tqdm import tqdm
 import torch
-import torch.nn
+import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
 from utils import get_experiment_dir
@@ -16,6 +15,7 @@ from data.openmic_utils import get_openmic_loaders
 from data.sonyc_utils import get_sonyc_loaders
 from evaluate.eval_baseline import eval_baseline
 from trainer.trainer_baseline import trainer_baseline
+from trainer.train_utils import create_model
 import evaluate.metrics
 
 def run(config):
@@ -28,7 +28,7 @@ def run(config):
     exp_dir = get_experiment_dir(config)
     base_type = config['type']
     
-    run_dir = os.path.join(exp_dir, config['seed'])
+    run_dir = os.path.join(exp_dir, 'seed_{}'.format(config['seed']))
     # tensorboard logger
     writer = SummaryWriter(run_dir)
     
@@ -102,7 +102,7 @@ def run(config):
 
         print('#### Testing ####')
         print('Test Loss: ', test_loss)
-        for key, val in metrics:
+        for key, val in metrics.items():
             print(f'Test {key}: {np.mean(val)}')
         
         # save metrics and model
@@ -111,12 +111,12 @@ def run(config):
         
         # jsonify metrics and write to json as well for manual inspection
         js = {}
-        for key, val in metrics:
+        for key, val in metrics.items():
             if not np.ndim(val) == 0:
                 js[key] = val.tolist()
             else:
                 js[key] = val
-        json.dump(js, f'metrics_{i}.json')
+        json.dump(js, open(os.path.join(exp_dir, f'metrics_{i}.json', 'w')))
     
 if __name__ == "__main__":
     
@@ -124,12 +124,12 @@ if __name__ == "__main__":
     For now just initialize config here
     TODO: Load config from json file
     """
-    # seeds = [0, 42, 345, 123, 45]
-    seeds = [0]
+    seeds = [0, 42, 345, 123, 45]
+    b_type = [0, 1]
+    # seeds = [0]
     config = {
         'logdir': '../logs',
         'exp_name': 'baseline',
-        'type': 0,
         'dataset': 'openmic',
         'mode': 0,
         'coarse': 0,
@@ -139,10 +139,15 @@ if __name__ == "__main__":
             'wd': 1e-5,
             'n_layers': 3,
             'dropout': 0.6,
-            'num_epochs': 300,
+            'num_epochs': 200,
             'batch_size': 100
         }
     }
-    for seed in seeds:
-        config['seed'] = seed
-        run(config)
+
+    for b_t in b_type:
+        for seed in seeds:
+            config['seed'] = seed
+            config['type'] = b_t
+            run(config)
+        config.pop('seed')
+        json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))

@@ -1,13 +1,5 @@
-import sys
-import math
-import random
-from copy import deepcopy
-
-import numpy
-import torch
-import torch.nn as nn
-from pprint import pprint
-from train_utils import *
+from tqdm import tqdm
+from trainer.train_utils import *
 
 def trainer_baseline(model, data_loader, optimizer, criterion, baseline_type=0):
     model.train()
