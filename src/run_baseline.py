@@ -116,7 +116,7 @@ def run(config):
                 js[key] = val.tolist()
             else:
                 js[key] = val
-        json.dump(js, open(os.path.join(exp_dir, f'metrics_{i}.json', 'w')))
+        json.dump(js, open(os.path.join(exp_dir, f'metrics_{i}.json'), 'w'))
     
 if __name__ == "__main__":
     
