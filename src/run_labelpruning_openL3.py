@@ -202,7 +202,7 @@ if __name__ == "__main__":
     TODO: Load config from json file
     """
     seeds = [0, 42, 345, 123, 45]
-    prune_thres_list = [0.5, 0.75]
+    prune_thres_list = [0.05, 0.1, 0.25]
     config = {
         'logdir': '../logs/OpenL3/',
         'exp_name': 'labelprune',

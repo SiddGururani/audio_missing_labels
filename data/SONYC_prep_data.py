@@ -6,7 +6,9 @@ import numpy as np
 
 annotation_path = 'annotations.csv'
 taxonomy_path = 'dcase-ust-taxonomy.yaml'
-embedding_path = 'vggish_features/'
+# embedding_path = 'vggish_features/'
+embedding_path = 'features/'
+
 
 def get_subset_split(annotation_data):
     """
@@ -84,21 +86,44 @@ def get_targets(annotation_data, labels, mode):
                 targets[i, j] =  label_dict[fname][label]['gt']
             else:
                 # this is a crowdsourced annotation
-                # check for 100% agreement
                 anno_count =  label_dict[fname][label]['pos'] + label_dict[fname][label]['neg']
                 if anno_count == 0:
                     # Nothing was annotated based on the selected criteria
                     continue
-                if label_dict[fname][label]['pos']/anno_count == 1:
-                    # this can be treated as a ground truth label
-                    mask[i, j] = 1
+                if label_dict[fname][label]['pos'] > label_dict[fname][label]['neg']:
+                    # this can be treated as a weak positive label
+                    # notice how we do not set the mask to 1 for this
                     targets[i, j] =  1
-                elif label_dict[fname][label]['neg']/anno_count == 1:
-                    # this can be treated as a ground truth label
-                    mask[i, j] = 1
+                else:
+                    # this can be treated as a weak negative label
                     targets[i, j] =  0
 
-    return targets, mask    
+    return targets, mask
+
+def get_targets_orig(annotation_data, labels):
+    file_list = annotation_data['audio_filename'].unique().tolist()
+    count_dict = {fname: {label: 0 for label in labels} for fname in file_list}
+
+    for _, row in annotation_data.iterrows():
+        fname = row['audio_filename']
+        split = row['split']
+        ann_id = row['annotator_id']
+
+        # For training set, only use crowdsourced annotations
+        if split == "train" and ann_id <= 0:
+            continue
+
+        # For validate and test sets, only use the verified annotation
+        if split != "train" and ann_id != 0:
+            continue
+
+        for label in labels:
+            count_dict[fname][label] += row[label + '_presence']
+
+    targets = np.array([[1.0 if count_dict[fname][label] > 0 else 0.0 for label in labels]
+                        for fname in file_list])
+
+    return targets
     
 def get_file_embeddings(annotation_data, embedding_path):
     """
@@ -120,6 +145,19 @@ def get_file_embeddings(annotation_data, embedding_path):
         embeddings[i] = np.load(os.path.join(embedding_path, fname+'.npy'))
 
     return embeddings
+
+def get_file_embeddings_openL3(annotation_data, embedding_path):
+
+    file_list = annotation_data['audio_filename'].unique().tolist()
+
+    embeddings = np.zeros((len(file_list), 11, 512), np.float32)
+
+    for idx, filename in enumerate(file_list):
+        emb_path = os.path.join(embedding_path, os.path.splitext(filename)[0] + '.npz')
+        embeddings[idx] = np.load(emb_path)['embedding']
+
+    return embeddings
+
 
 # Select mode
 # MODE = 0 means only verified annotations will be used for training data
@@ -145,10 +183,58 @@ coarse_target_labels = ["_".join([str(k), v])
                         for k,v in taxonomy['coarse'].items()]
 
 train_idx, val_idx, test_idx = get_subset_split(annotation_data)
-fine_targets, fine_mask = get_targets(annotation_data, fine_target_labels, MODE)
-coarse_targets, coarse_mask = get_targets(annotation_data, coarse_target_labels, MODE)
+# fine_targets, fine_mask = get_targets(annotation_data, fine_target_labels, MODE)
+# coarse_targets, coarse_mask = get_targets(annotation_data, coarse_target_labels, MODE)
 
-embeddings = get_file_embeddings(annotation_data, embedding_path)
+# To get original targets
+fine_target_list = get_targets_orig(annotation_data, full_fine_target_labels)
+fine_targets = get_targets_orig(annotation_data, fine_target_labels)
+coarse_targets = get_targets_orig(annotation_data, coarse_target_labels)
+
+#####################
+
+full_coarse_to_fine_terminal_idxs = np.cumsum(
+            [len(fine_dict) for fine_dict in taxonomy['fine'].values()])
+incomplete_fine_subidxs = [len(fine_dict) - 1 if 'X' in fine_dict else None
+                            for fine_dict in taxonomy['fine'].values()]
+coarse_to_fine_end_idxs = np.cumsum([len(fine_dict) - 1 if 'X' in fine_dict else len(fine_dict)
+                                        for fine_dict in taxonomy['fine'].values()])
+
+def get_mask(y_true):
+    y_mask = np.ones_like(y_true)
+    for coarse_idx in range(len(full_coarse_to_fine_terminal_idxs)):
+        true_terminal_idx = full_coarse_to_fine_terminal_idxs[coarse_idx]
+        true_incomplete_subidx = incomplete_fine_subidxs[coarse_idx]
+
+        if coarse_idx != 0:
+            true_start_idx = full_coarse_to_fine_terminal_idxs[coarse_idx-1]
+        else:
+            true_start_idx = 0
+
+        if true_incomplete_subidx is None:
+            true_end_idx = true_terminal_idx
+
+            sub_true = y_true[:, true_start_idx:true_end_idx]
+
+        else:
+            # Don't include incomplete label
+            true_end_idx = true_terminal_idx - 1
+            true_incomplete_idx = true_incomplete_subidx + true_start_idx
+
+            # 1 if not incomplete, 0 if incomplete
+            mask = 1 - y_true[:, true_incomplete_idx]
+            y_mask[:, true_start_idx:true_end_idx] = y_mask[:, true_start_idx:true_end_idx] * mask.reshape(-1, 1)
+    return y_mask
+y_mask = get_mask(fine_target_list)
+
+coarse_inds = [3, 8, 13, 18, 22, 27]
+fine_inds = list(set(np.arange(29)) - set(coarse_inds))
+fine_mask = y_mask[:, fine_inds]
+#####################
+
+coarse_mask = np.ones_like(coarse_targets)
+
+embeddings = get_file_embeddings_openL3(annotation_data, embedding_path)
 
 train_x = embeddings[train_idx, :]	
 val_x = embeddings[val_idx, :]	
@@ -205,4 +291,4 @@ data_dict = {
     }
 }
 
-np.save(f"data_dict_MODE_{MODE}", data_dict)
+np.save(f"SONYC_OpenL3", data_dict)

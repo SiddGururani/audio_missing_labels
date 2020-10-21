@@ -170,7 +170,7 @@ if __name__ == "__main__":
     """
     seeds = [0, 42, 345]
     baseline_type = [0, 1]
-    seeds = [0]
+    # seeds = [42, 345]
     config = {
         'logdir': '../logs/OpenL3',
         'exp_name': 'mean_teacher_droplabels',
