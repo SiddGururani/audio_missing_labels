@@ -1,6 +1,7 @@
 import sys
 import math
 import random
+from tqdm import tqdm
 from pprint import pprint
 from copy import deepcopy
 
@@ -8,7 +9,7 @@ import numpy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..trainer.train_utils import *
+from trainer.train_utils import *
 
 def eval_mt(model, teacher, data_loader, criterion, n_classes, metric_fn):
     model.eval()
@@ -33,8 +34,8 @@ def eval_mt(model, teacher, data_loader, criterion, n_classes, metric_fn):
         
         # Regardless of what criterion or whether this is instrument-wise
         # Let the criterion function deal with it
-        class_loss,_ = criterion(outputs, Y_true, Y_mask)
-        t_class_loss,_ = criterion(outputs_, Y_true, Y_mask)
+        class_loss = criterion(outputs[Y_mask], Y_true[Y_mask])
+        t_class_loss = criterion(outputs_[Y_mask], Y_true[Y_mask])
         
         consistency_loss = F.mse_loss(outputs, outputs_)
 

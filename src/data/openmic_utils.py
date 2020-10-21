@@ -12,15 +12,16 @@ def get_openmic_loaders(config):
     abs_path = config['data_path']
     full_dataset = HDF5Dataset(os.path.join(abs_path, 'openmic_train.h5'))
     train_val_split = np.load(os.path.join(abs_path, 'train_val.split'))
+
     train_dataset = Subset(full_dataset, train_val_split['train'])
     val_dataset = Subset(full_dataset, train_val_split['val'])
     test_dataset = HDF5Dataset(os.path.join(abs_path, 'openmic_test.h5'))
 
     batch_size = config['hparams']['batch_size']
-    train_loader = torch.utils.data.DataLoader(train_dataset, 100, shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, 100)
-    test_loader = torch.utils.data.DataLoader(test_dataset, 100)
-    return (train_loader, val_loader, test_loader), train_dataset
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size, shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size)
+    return (train_loader, val_loader, test_loader), (full_dataset, train_val_split['train'])
 
 def binarize_targets(targets, threshold=0.5):
     targets[targets < threshold] = 0
@@ -53,18 +54,19 @@ class HDF5Dataset(Dataset):
         # in the dataloader init. Only for augmentation though
         if self.h is None:
             self.h = h5py.File(self.h5_path, 'r', libver='latest', swmr=True)
-            self.vggish = self.h['vggish'][:]/255.0
+            self.X = self.h['vggish'][:]/255.0
             self.Y_true = self.h['Y_true'][:]
             self.Y_mask = self.h['Y_mask'][:]
+            self.Y_true[self.Y_mask == 0] = 0.
         # Add routines to decide which data to pick up depending on what augmentation to use
         # In future iterations, also experiment with outputting two augmented versions of X
         t_dtype = torch.float16 if self.half else torch.float32
         if self.feat_type == 'vgg':
-            X = self.vggish[index]
+            X = self.X[index]
         elif self.feat_type == 'vgg_wave':
             i = np.random.choice(range(7))
             if i == 0:
-                X = self.vggish[index]
+                X = self.X[index]
             else:
                 X = self.wave[index][i-1]
         elif self.feat_type == 'spec':

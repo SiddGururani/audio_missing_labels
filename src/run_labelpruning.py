@@ -9,11 +9,12 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader, TensorDataset
 
-from utils import get_experiment_dir
+from utils import get_experiment_dir, get_enhanced_labels
 from data.openmic_utils import get_openmic_loaders
 from data.sonyc_utils import get_sonyc_loaders
-from evaluate.eval_baseline import eval_baseline
+from evaluate.eval_baseline import eval_baseline, forward
 from trainer.trainer_baseline import trainer_baseline
 from trainer.train_utils import create_model
 import evaluate.metrics
@@ -26,7 +27,6 @@ def run(config):
     np.random.seed(seed)
 
     exp_dir = get_experiment_dir(config)
-    base_type = config['type']
     
     run_dir = os.path.join(exp_dir, 'seed_{}'.format(config['seed']))
     # tensorboard logger
@@ -34,16 +34,23 @@ def run(config):
     
     # get data loaders and metrics function
     if config['dataset'] == 'openmic':
-        (train_loader, val_loader, test_loader), _ = get_openmic_loaders(config)
+        (train_loader, val_loader, test_loader), (full_dataset, train_inds) = get_openmic_loaders(config)
         n_classes = 20
         metric_fn = evaluate.metrics.metric_fn_openmic
     elif config['dataset'] == 'sonyc':
-        (train_loader, val_loader, test_loader), _ = get_sonyc_loaders(config)
+        (train_loader, val_loader, test_loader), train_dataset = get_sonyc_loaders(config)
         if config['coarse']:
             n_classes = 8
         else:
             n_classes = 23
         metric_fn = evaluate.metrics.metric_fn_sonycust
+
+        # Randomly remove labels
+        if 'label_drop_rate' in config:
+            label_drop_rate = config['label_drop_rate']
+            drop_mask = np.random.rand(*train_dataset.Y_mask.shape)
+            drop_mask = train_dataset.Y_mask + drop_mask
+            train_dataset.Y_mask = drop_mask > (1 + label_drop_rate)
 
     # hyper params
     hparams = config['hparams']
@@ -51,6 +58,8 @@ def run(config):
     wd = hparams['wd']
     model_params = {'drop_rate':hparams['dropout'], 'n_classes':n_classes, 'n_layers':hparams['n_layers']}
     num_epochs = hparams['num_epochs']
+    prune_thres = hparams['prune_thres']
+    batch_size = hparams['batch_size']
 
     # initialize models
     model = create_model(model_params)
@@ -64,7 +73,7 @@ def run(config):
     best_val_loss = 100000.0
     best_f1_macro = -1.0
 
-    # training loop
+    # teacher training loop
     for epoch in tqdm(range(num_epochs)):
         # drop learning rate every 30 epochs
         if (epoch > 0) and (epoch % 30 == 0):
@@ -72,7 +81,8 @@ def run(config):
                 param_group['lr'] = lr * 0.5
                 lr = lr * 0.5
 
-        train_loss = trainer_baseline(model, train_loader, optimizer, criterion, base_type)
+        # first train treating all missing labels as negatives
+        train_loss = trainer_baseline(model, train_loader, optimizer, criterion, baseline_type=0)
         print('#### Training ####')
         print('Loss: {}'.format(train_loss))
 
@@ -84,7 +94,70 @@ def run(config):
 
         # log to tensorboard
         writer.add_scalar("train/loss", train_loss, epoch)
-        writer.add_scalar("val/loss", val_loss, epoch)
+        writer.add_scalar("val/loss_loss", val_loss, epoch)
+        writer.add_scalar(f"val/{val_metric}", avg_val_metric, epoch)
+
+        #Save best models
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_models[0] = deepcopy(model)
+
+        if avg_val_metric > best_f1_macro:
+            best_f1_macro = avg_val_metric
+            best_models[1] = deepcopy(model)
+
+    # Perform label pruning
+    if config['dataset'] == 'openmic':
+        X = full_dataset.X[train_inds]
+        Y_mask = full_dataset.Y_mask[train_inds]
+        X_dataset = TensorDataset(torch.tensor(X, requires_grad=False, dtype=torch.float32))
+        loader = DataLoader(X_dataset, batch_size)
+        all_predictions = forward(best_models[0], loader, n_classes)
+        new_mask = get_enhanced_labels(Y_mask, all_predictions, prune_thres)
+        full_dataset.Y_mask[train_inds] = new_mask
+
+    if config['dataset'] == 'sonyc':
+        X = train_dataset.X
+        Y_mask = train_dataset.Y_mask
+        X_dataset = TensorDataset(torch.tensor(X, requires_grad=False, dtype=torch.float32))
+        loader = DataLoader(X_dataset, batch_size)
+        all_predictions = forward(best_models[0], loader, n_classes)
+        new_mask = get_enhanced_labels(Y_mask, all_predictions, prune_thres)
+        train_dataset.Y_mask = new_mask
+    # Retrain with pruned labels
+
+    # initialize models
+    model = create_model(model_params)
+   
+    # initialize optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+
+    # initialize best metric variables
+    best_models = [None, None]
+    best_val_loss = 100000.0
+    best_f1_macro = -1.0
+
+    for epoch in tqdm(range(num_epochs)):
+        # drop learning rate every 30 epochs
+        if (epoch > 0) and (epoch % 30 == 0):
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr * 0.5
+                lr = lr * 0.5
+
+        # train with new mask
+        train_loss = trainer_baseline(model, train_loader, optimizer, criterion, baseline_type=1)
+        print('#### Training ####')
+        print('Loss: {}'.format(train_loss))
+
+        val_loss, metrics = eval_baseline(model, val_loader, criterion, n_classes, metric_fn, baseline_type=1)
+        val_metric = 'F1_macro' if config['dataset'] == 'openmic' else 'auprc_macro'
+        avg_val_metric = np.mean(metrics[val_metric])
+        print('#### Validation ####')
+        print('Loss: {}\t Macro F1 score: {}'.format(val_loss, avg_val_metric))
+
+        # log to tensorboard
+        writer.add_scalar("train/loss", train_loss, epoch)
+        writer.add_scalar("val/loss_loss", val_loss, epoch)
         writer.add_scalar(f"val/{val_metric}", avg_val_metric, epoch)
 
         #Save best models
@@ -117,6 +190,7 @@ def run(config):
             else:
                 js[key] = val
         json.dump(js, open(os.path.join(run_dir, f'metrics_{i}.json'), 'w'))
+    json.dump(config, open(os.path.join(run_dir, f'config.json'), 'w'))
     
 if __name__ == "__main__":
     
@@ -125,11 +199,10 @@ if __name__ == "__main__":
     TODO: Load config from json file
     """
     seeds = [0, 42, 345, 123, 45]
-    baseline_type = [0, 1]
-    # seeds = [0]
+    prune_thres_list = [0.5, 0.75]
     config = {
-        'logdir': '../logs',
-        'exp_name': 'baseline',
+        'logdir': '../logs/LE/',
+        'exp_name': 'labelprune',
         'mode': 0,
         'coarse': 0,
         'data_path': '../data',
@@ -139,7 +212,8 @@ if __name__ == "__main__":
             'n_layers': 3,
             'dropout': 0.6,
             'num_epochs': 100,
-            'batch_size': 64
+            'batch_size': 64,
+            'prune_thres': 0.05
         }
     }
 
@@ -147,26 +221,19 @@ if __name__ == "__main__":
     For OpenMIC
     """
     config['dataset'] = 'openmic'
-    for b_t in baseline_type:
+    for prune_thres in prune_thres_list:
         for seed in seeds:
             config['seed'] = seed
-            config['type'] = b_t
+            config['hparams']['prune_thres'] = prune_thres
             run(config)
-        config.pop('seed')
-        json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
 
     """
     For SONYC-UST:
     There are few missing labels in SONYC-UST.
     """
-    config['dataset'] = 'sonyc'
-    modes = [0]
-    for b_t in baseline_type:
-        for mode in modes:
-            for seed in seeds:
-                config['seed'] = seed
-                config['type'] = b_t
-                config['mode'] = mode
-                run(config)
-            config.pop('seed')
-            json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
+    # config['dataset'] = 'sonyc'
+    # for prune_thres in prune_thres_list:
+    #     for seed in seeds:
+    #         config['seed'] = seed
+    #         config['hparams']['prune_thres'] = prune_thres
+    #         run(config)

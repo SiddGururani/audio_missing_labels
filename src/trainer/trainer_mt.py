@@ -2,7 +2,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from trainer.train_utils import *
 
-def trainer(model, teacher, data_loader, optimizer, criterion, c_w, alpha, epoch_num):
+def trainer_mt(model, teacher, data_loader, optimizer, criterion, c_w, alpha, epoch_num):
     global_step = epoch_num * len(data_loader)
     model.train()
     teacher.train()
@@ -21,7 +21,7 @@ def trainer(model, teacher, data_loader, optimizer, criterion, c_w, alpha, epoch
         
         # Regardless of what criterion or whether this is instrument-wise
         # Let the criterion function deal with it
-        class_loss,_ = criterion(outputs, Y_true, Y_mask)
+        class_loss = criterion(outputs[Y_mask], Y_true[Y_mask])
         
         # Compute consistency loss here
         outputs_ = teacher(X)
@@ -37,10 +37,10 @@ def trainer(model, teacher, data_loader, optimizer, criterion, c_w, alpha, epoch
         # Update teacher
         global_step += 1
         update_ema_variables(model, teacher, global_step, alpha)
-        t_class_loss,_ = criterion(outputs_, Y_true, Y_mask)
+        t_class_loss = criterion(outputs_[Y_mask], Y_true[Y_mask])
                                  
         # Update average meters
         class_loss_tracker.update(class_loss.item())
         consi_loss_tracker.update(consistency_loss.item())
         t_class_loss_tracker.update(t_class_loss.item())
-    return class_loss_tracker.avg, consi_loss_tracker.avg, t_class_loss_tracker.avg
+    return (class_loss_tracker.avg, consi_loss_tracker.avg, t_class_loss_tracker.avg)

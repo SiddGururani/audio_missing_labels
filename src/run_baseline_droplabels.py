@@ -33,17 +33,18 @@ def run(config):
     writer = SummaryWriter(run_dir)
     
     # get data loaders and metrics function
-    if config['dataset'] == 'openmic':
-        (train_loader, val_loader, test_loader), _ = get_openmic_loaders(config)
-        n_classes = 20
-        metric_fn = evaluate.metrics.metric_fn_openmic
-    elif config['dataset'] == 'sonyc':
-        (train_loader, val_loader, test_loader), _ = get_sonyc_loaders(config)
-        if config['coarse']:
-            n_classes = 8
-        else:
-            n_classes = 23
-        metric_fn = evaluate.metrics.metric_fn_sonycust
+    (train_loader, val_loader, test_loader), train_dataset = get_sonyc_loaders(config)
+    if config['coarse']:
+        n_classes = 8
+    else:
+        n_classes = 23
+    metric_fn = evaluate.metrics.metric_fn_sonycust
+
+    # Randomly remove labels
+    label_drop_rate = config['label_drop_rate']
+    drop_mask = np.random.rand(*train_dataset.Y_mask.shape)
+    drop_mask = train_dataset.Y_mask + drop_mask
+    train_dataset.Y_mask = drop_mask > (1 + label_drop_rate)
 
     # hyper params
     hparams = config['hparams']
@@ -76,7 +77,7 @@ def run(config):
         print('#### Training ####')
         print('Loss: {}'.format(train_loss))
 
-        val_loss, metrics = eval_baseline(model, val_loader, criterion, n_classes, metric_fn, baseline_type=1)
+        val_loss, metrics = eval_baseline(model, val_loader, criterion, n_classes, metric_fn, baseline_type=base_type)
         val_metric = 'F1_macro' if config['dataset'] == 'openmic' else 'auprc_macro'
         avg_val_metric = np.mean(metrics[val_metric])
         print('#### Validation ####')
@@ -84,7 +85,7 @@ def run(config):
 
         # log to tensorboard
         writer.add_scalar("train/loss", train_loss, epoch)
-        writer.add_scalar("val/loss", val_loss, epoch)
+        writer.add_scalar("val/loss_loss", val_loss, epoch)
         writer.add_scalar(f"val/{val_metric}", avg_val_metric, epoch)
 
         #Save best models
@@ -98,7 +99,7 @@ def run(config):
 
     # Test best models
     for i, model in enumerate(best_models):
-        test_loss, metrics = eval_baseline(model, test_loader, criterion, n_classes, metric_fn, baseline_type=1)
+        test_loss, metrics = eval_baseline(model, test_loader, criterion, n_classes, metric_fn, baseline_type=base_type)
 
         print('#### Testing ####')
         print('Test Loss: ', test_loss)
@@ -124,12 +125,10 @@ if __name__ == "__main__":
     For now just initialize config here
     TODO: Load config from json file
     """
-    seeds = [0, 42, 345, 123, 45]
-    baseline_type = [0, 1]
-    # seeds = [0]
+    seeds = [0, 42, 345]
     config = {
         'logdir': '../logs',
-        'exp_name': 'baseline',
+        'exp_name': 'baseline_droplabels',
         'mode': 0,
         'coarse': 0,
         'data_path': '../data',
@@ -144,29 +143,19 @@ if __name__ == "__main__":
     }
 
     """
-    For OpenMIC
-    """
-    config['dataset'] = 'openmic'
-    for b_t in baseline_type:
-        for seed in seeds:
-            config['seed'] = seed
-            config['type'] = b_t
-            run(config)
-        config.pop('seed')
-        json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
-
-    """
     For SONYC-UST:
     There are few missing labels in SONYC-UST.
     """
     config['dataset'] = 'sonyc'
+    label_drop_rates = [0.1, 0.2, 0.4, 0.8]
+    baseline_type = [1, 0]
     modes = [0]
     for b_t in baseline_type:
-        for mode in modes:
+        for drop_rate in label_drop_rates:
             for seed in seeds:
                 config['seed'] = seed
                 config['type'] = b_t
-                config['mode'] = mode
+                config['label_drop_rate'] = drop_rate
                 run(config)
             config.pop('seed')
-            json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
+            json.dump(config, open('../configs/baseline_droplabels_{}_{}.json'.format(config['dataset'], b_t), 'w'))

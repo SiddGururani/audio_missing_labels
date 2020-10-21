@@ -6,32 +6,43 @@ from torch.utils.data import Dataset, Subset, DataLoader
 
 def get_sonyc_loaders(config):
     data_path = config['data_path']
-    model = config['mode']
+    mode = config['mode']
     coarse = config['coarse']
-    data_dict = np.load(os.path.join(data_path, f"SONYC_data_MODE_{mode}.npy"), allow_pickle=True)
+    # data_dict = np.load(os.path.join(data_path, f"SONYC_data_orig_fixed.npy"), allow_pickle=True)
+    data_dict = np.load(os.path.join(data_path, f"SONYC_OpenL3.npy"), allow_pickle=True)
     data_dict = data_dict.item()
 
-    train_dataset = SONYCDataset(data_dict, 'train', coarse)
+    train_dataset = SONYCDataset(data_dict, 'train', mode, coarse)
     val_dataset = SONYCDataset(data_dict, 'val', coarse)
     test_dataset = SONYCDataset(data_dict, 'test', coarse)
 
+    # Standardize data
+    train_mean = train_dataset.X.mean(axis=(0, 1))
+    train_std = np.std(train_dataset.X, axis=(0, 1))
+
+    train_dataset.X = (train_dataset.X - train_mean)/train_std
+    val_dataset.X = (val_dataset.X - train_mean)/train_std
+    test_dataset.X = (test_dataset.X - train_mean)/train_std
+
     batch_size = config['hparams']['batch_size']
-    train_loader = torch.utils.data.DataLoader(train_dataset, 100, shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, 100)
-    test_loader = torch.utils.data.DataLoader(test_dataset, 100)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size, shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size)
 
     return (train_loader, val_loader, test_loader), train_dataset
 
 class SONYCDataset(Dataset):
-    def __init__(self, data_dict, split, coarse=0):
-        data = data_dict[split]['coarse' if coarse else 'fine']
-        self.X = data['X']/255.0
-        self.Y_true = data['Y_true']
-        self.Y_mask = data['Y_mask']
+    def __init__(self, data_dict, split, mode=0, coarse=0):
+        labels = data_dict[split]['coarse' if coarse else 'fine']
+        self.X = data_dict[split]['X']
+        self.Y_true = labels['Y_true']
+        self.Y_mask = labels['Y_mask']
+        # if mode == 1:
+        #     self.Y_mask = np.ones_like(self.Y_mask)
         self.length = self.X.shape[0]
         self.H, self.W = self.X[0].shape
-        self.labelled = h['Y_mask'][:].sum()
-        self.total = np.prod(h['Y_mask'].shape)
+        # self.labelled = h['Y_mask'][:].sum()
+        # self.total = np.prod(h['Y_mask'].shape)
     
     def __len__(self):
         return self.length

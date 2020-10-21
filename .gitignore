@@ -126,3 +126,4 @@ data/train_val.split
 
 # directories
 logs/
+configs/

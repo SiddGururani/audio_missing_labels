@@ -49,7 +49,10 @@ def run(config):
     hparams = config['hparams']
     lr = hparams['lr']
     wd = hparams['wd']
-    model_params = {'drop_rate':hparams['dropout'], 'n_classes':n_classes, 'n_layers':hparams['n_layers']}
+    model_params = {'n_features': hparams['n_features'], 
+                    'drop_rate':hparams['dropout'], 
+                    'n_classes':n_classes, 
+                    'n_layers':hparams['n_layers']}
     num_epochs = hparams['num_epochs']
 
     # initialize models
@@ -117,6 +120,7 @@ def run(config):
             else:
                 js[key] = val
         json.dump(js, open(os.path.join(run_dir, f'metrics_{i}.json'), 'w'))
+    json.dump(config, open(os.path.join(run_dir, f'config.json'), 'w'))
     
 if __name__ == "__main__":
     
@@ -128,7 +132,7 @@ if __name__ == "__main__":
     baseline_type = [0, 1]
     # seeds = [0]
     config = {
-        'logdir': '../logs',
+        'logdir': '../logs/OpenL3',
         'exp_name': 'baseline',
         'mode': 0,
         'coarse': 0,
@@ -136,7 +140,8 @@ if __name__ == "__main__":
         'hparams': {
             'lr': 0.001,
             'wd': 1e-5,
-            'n_layers': 3,
+            'n_layers': 1,
+            'n_features': 512,
             'dropout': 0.6,
             'num_epochs': 100,
             'batch_size': 64
@@ -146,14 +151,14 @@ if __name__ == "__main__":
     """
     For OpenMIC
     """
-    config['dataset'] = 'openmic'
-    for b_t in baseline_type:
-        for seed in seeds:
-            config['seed'] = seed
-            config['type'] = b_t
-            run(config)
-        config.pop('seed')
-        json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
+    # config['dataset'] = 'openmic'
+    # for b_t in baseline_type:
+    #     for seed in seeds:
+    #         config['seed'] = seed
+    #         config['type'] = b_t
+    #         run(config)
+    #     config.pop('seed')
+    #     json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
 
     """
     For SONYC-UST:
@@ -168,5 +173,4 @@ if __name__ == "__main__":
                 config['type'] = b_t
                 config['mode'] = mode
                 run(config)
-            config.pop('seed')
-            json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
+            

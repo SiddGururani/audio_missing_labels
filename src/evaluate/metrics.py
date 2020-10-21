@@ -61,7 +61,7 @@ def compute_micro_F1(y_true, y_scores):
 def metric_fn_sonycust(Y_true, Y_mask, preds):
     # Get classwise auprc
     avg_auprc = []
-    for i in range(labels.shape[-1]):
+    for i in range(Y_true.shape[-1]):
         labels = Y_true[:, i]
         labels_mask = Y_mask[:, i]
         predictions = preds[:, i]
@@ -73,12 +73,19 @@ def metric_fn_sonycust(Y_true, Y_mask, preds):
         aupr = auprc(labels[relevant_inds], predictions[relevant_inds])
 
         avg_auprc.append(aupr)
+    
         
     metrics = {
-        'auprc_macro': np.array(avg_auprc),
+        'auprc_macro': np.nanmean(avg_auprc),
         'F1_micro': compute_micro_F1(Y_true[Y_mask], preds[Y_mask]),
-        'auprc_micro': compute_micro_F1(Y_true[Y_mask], preds[Y_mask])
+        'auprc_micro': compute_micro_auprc(Y_true[Y_mask], preds[Y_mask])
     }
+
+    # metrics = {
+    #     'auprc_macro': compute_macro_auprc(Y_true, preds),
+    #     'F1_micro': compute_micro_F1(Y_true, preds),
+    #     'auprc_micro': compute_micro_auprc(Y_true, preds)
+    # }
     return metrics
 
 def metric_fn_openmic(Y_true, Y_mask, preds, threshold=0.5):

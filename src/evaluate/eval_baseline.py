@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from pprint import pprint
 from trainer.train_utils import *
+from utils import to_numpy
 
 def eval_baseline(model, data_loader, criterion, n_classes, metric_fn, return_preds=False, baseline_type=0):
     model.eval()
@@ -40,7 +41,21 @@ def eval_baseline(model, data_loader, criterion, n_classes, metric_fn, return_pr
         # Update average meter
         loss_tracker.update(loss.item())
     
+    all_y_mask = to_numpy(all_y_mask)
+    all_y_true = to_numpy(all_y_true)
+    all_predictions = to_numpy(all_predictions)
+
     metrics = metric_fn(all_y_true, all_y_mask, all_predictions)
     if return_preds:
         return loss_tracker.avg, metrics, (all_y_true, all_y_mask, all_predictions)
     return loss_tracker.avg, metrics
+
+def forward(model, data_loader, n_classes):
+    model.eval()
+    all_predictions = torch.Tensor(0, n_classes)
+    for X in data_loader:
+        X = X[0].cuda()
+        outputs = model(X)
+        all_predictions = torch.cat((all_predictions, outputs.detach().cpu()))
+
+    return to_numpy(all_predictions)

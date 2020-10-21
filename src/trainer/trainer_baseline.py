@@ -6,6 +6,10 @@ def trainer_baseline(model, data_loader, optimizer, criterion, baseline_type=0):
     loss_tracker = AverageMeter()
     for (X, Y_true, Y_mask) in tqdm(data_loader):
 
+        # Check if batch has any labels
+        if Y_mask.sum() == 0:
+            continue
+
         X = X.cuda()
         Y_true = Y_true.cuda()
         Y_mask = Y_mask.cuda()

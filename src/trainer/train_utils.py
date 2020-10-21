@@ -45,10 +45,14 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
         
 def create_model(params, no_grad=False):
-    model = DecisionLevelSingleAttention(128,
+    if 'n_features' not in params:
+        n_features = 128
+    else:
+        n_features = params['n_features']
+    model = DecisionLevelSingleAttention(n_features,
                                         params['n_classes'],
                                         params['n_layers'],
-                                        128,
+                                        n_features,
                                         params['drop_rate'])
     
     model = model.cuda()
