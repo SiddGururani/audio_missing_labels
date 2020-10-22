@@ -142,7 +142,7 @@ def run(config):
         np.save(os.path.join(run_dir, f'metrics_{i}'), metrics)
 
         torch.save(teacher.state_dict(), os.path.join(run_dir, f'teacher_{i}.pth'))
-        np.save(os.path.join(run_dir, f'teacher_metrics_{i}'), metrics)
+        np.save(os.path.join(run_dir, f'teacher_metrics_{i}'), metrics_t)
         
         # jsonify metrics and write to json as well for manual inspection
         js = {}
@@ -171,13 +171,13 @@ if __name__ == "__main__":
     seeds = [0, 42, 345, 123, 45]
     baseline_type = [0, 1]
     config = {
-        'logdir': '../logs/OpenL3',
+        'logdir': '../logs/SONYC_MT',
         'exp_name': 'mean_teacher',
         'mode': 0,
         'coarse': 0,
         'data_path': '../data',
         'hparams': {
-            'lr': 0.001,
+            'lr': 0.0005,
             'wd': 1e-5,
             'n_layers': 1,
             'n_features': 512,
@@ -185,7 +185,7 @@ if __name__ == "__main__":
             'num_epochs': 100,
             'batch_size': 64,
             'cw': 3,
-            'alpha': 0.999
+            'alpha': 0.99
         }
     }
 

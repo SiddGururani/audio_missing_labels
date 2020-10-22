@@ -172,7 +172,7 @@ if __name__ == "__main__":
     baseline_type = [0, 1]
     # seeds = [42, 345]
     config = {
-        'logdir': '../logs/OpenL3',
+        'logdir': '../logs/SONYC_MT',
         'exp_name': 'mean_teacher_droplabels',
         'mode': 0,
         'coarse': 0,
@@ -181,7 +181,7 @@ if __name__ == "__main__":
             'lr': 0.001,
             'wd': 1e-5,
             'n_layers': 1,
-            'dropout': 0.6,
+            'dropout': 0.3,
             'n_features': 512,
             'num_epochs': 100,
             'batch_size': 64,

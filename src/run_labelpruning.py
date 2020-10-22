@@ -30,6 +30,9 @@ def run(config):
     
     run_dir = os.path.join(exp_dir, 'seed_{}'.format(config['seed']))
     # tensorboard logger
+    if os.path.exists(run_dir):
+        print('Experiment already completed')
+        return
     writer = SummaryWriter(run_dir)
     
     # get data loaders and metrics function
@@ -199,9 +202,10 @@ if __name__ == "__main__":
     TODO: Load config from json file
     """
     seeds = [0, 42, 345, 123, 45]
-    prune_thres_list = [0.5, 0.75]
+    prune_thres_list = [0.9]
+    # seeds = [0]
     config = {
-        'logdir': '../logs/LE/',
+        'logdir': '../logs/OpenMIC_LE/',
         'exp_name': 'labelprune',
         'mode': 0,
         'coarse': 0,
@@ -210,7 +214,7 @@ if __name__ == "__main__":
             'lr': 0.001,
             'wd': 1e-5,
             'n_layers': 3,
-            'dropout': 0.6,
+            'dropout': 0.3,
             'num_epochs': 100,
             'batch_size': 64,
             'prune_thres': 0.05

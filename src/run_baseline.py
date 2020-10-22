@@ -36,7 +36,7 @@ def run(config):
     if config['dataset'] == 'openmic':
         (train_loader, val_loader, test_loader), _ = get_openmic_loaders(config)
         n_classes = 20
-        metric_fn = evaluate.metrics.metric_fn_openmic
+        metric_fn = evaluate.metrics.metric_fn_sonycust
     elif config['dataset'] == 'sonyc':
         (train_loader, val_loader, test_loader), _ = get_sonyc_loaders(config)
         if config['coarse']:
@@ -77,7 +77,8 @@ def run(config):
         print('Loss: {}'.format(train_loss))
 
         val_loss, metrics = eval_baseline(model, val_loader, criterion, n_classes, metric_fn, baseline_type=1)
-        val_metric = 'F1_macro' if config['dataset'] == 'openmic' else 'auprc_macro'
+        # val_metric = 'F1_macro' if config['dataset'] == 'openmic' else 'auprc_macro'
+        val_metric = 'auprc_macro'
         avg_val_metric = np.mean(metrics[val_metric])
         print('#### Validation ####')
         print('Loss: {}\t Macro F1 score: {}'.format(val_loss, avg_val_metric))
@@ -128,13 +129,13 @@ if __name__ == "__main__":
     baseline_type = [0, 1]
     # seeds = [0]
     config = {
-        'logdir': '../logs',
+        'logdir': '../logs/final_runs',
         'exp_name': 'baseline',
         'mode': 0,
         'coarse': 0,
         'data_path': '../data',
         'hparams': {
-            'lr': 0.001,
+            'lr': 0.0005,
             'wd': 1e-5,
             'n_layers': 3,
             'dropout': 0.6,
@@ -159,14 +160,14 @@ if __name__ == "__main__":
     For SONYC-UST:
     There are few missing labels in SONYC-UST.
     """
-    config['dataset'] = 'sonyc'
-    modes = [0]
-    for b_t in baseline_type:
-        for mode in modes:
-            for seed in seeds:
-                config['seed'] = seed
-                config['type'] = b_t
-                config['mode'] = mode
-                run(config)
-            config.pop('seed')
-            json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
+    # config['dataset'] = 'sonyc'
+    # modes = [0]
+    # for b_t in baseline_type:
+    #     for mode in modes:
+    #         for seed in seeds:
+    #             config['seed'] = seed
+    #             config['type'] = b_t
+    #             config['mode'] = mode
+    #             run(config)
+    #         config.pop('seed')
+    #         json.dump(config, open('../configs/baseline_{}_{}.json'.format(config['dataset'], b_t), 'w'))
